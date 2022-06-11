@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
-import 'dart:math' as math;
+import 'dart:convert';
+import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 void main() {
@@ -17,30 +18,136 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(),
+      home: BlocProvider(
+        create: (context) => PersonsBloc(),
+        child: const MyHomePage(),
+      ),
     );
   }
 }
 
-const names = [
-  "Foo",
-  "Bar",
-  "Baz",
-];
-
-extension RandomElement<T> on Iterable<T> {
-  T getRandomElement() => elementAt(
-        math.Random().nextInt(
-          length,
-        ),
-      );
+enum PersonUrl {
+  persons1,
+  persons2,
 }
 
-class NamesCubit extends Cubit<String?> {
-  NamesCubit() : super(null);
+extension Subscript<T> on Iterable<T> {
+  T? operator [](int index) => length > index
+      ? elementAt(
+          index,
+        )
+      : null;
+}
 
-  void pickRandomName() => emit(
-        names.getRandomElement(),
+extension UrlString on PersonUrl {
+  String get urlString {
+    switch (this) {
+      case PersonUrl.persons1:
+        return "http://127.0.0.1:5500/api/person1.json";
+      case PersonUrl.persons2:
+        return "http://127.0.0.1:5500/api/person2.json";
+    }
+  }
+}
+
+@immutable
+abstract class LoadAction {
+  const LoadAction();
+}
+
+@immutable
+class LoadPersonAction implements LoadAction {
+  final PersonUrl personUrl;
+
+  const LoadPersonAction({
+    required this.personUrl,
+  }) : super();
+}
+
+@immutable
+class Person {
+  final String name;
+  final int age;
+
+  const Person({
+    required this.name,
+    required this.age,
+  });
+
+  Person.fromJson(Map<String, dynamic> json)
+      : name = json['name'] as String,
+        age = json['age'] as int;
+}
+
+@immutable
+class FetchResult {
+  final Iterable<Person> persons;
+  final bool isRetrievedFromCache;
+
+  const FetchResult({
+    required this.persons,
+    required this.isRetrievedFromCache,
+  });
+}
+
+class PersonsBloc extends Bloc<LoadAction, FetchResult?> {
+  final Map<PersonUrl, Iterable<Person>> _cache = {};
+  PersonsBloc() : super(null) {
+    on<LoadPersonAction>(event, emit) async {
+      final url = event.url;
+
+      if (_cache.containsKey(url)) {
+        final cachedPersons = _cache[url];
+
+        final result = FetchResult(
+          persons: cachedPersons!,
+          isRetrievedFromCache: true,
+        );
+
+        emit(result);
+      } else {
+        final persons = await getPersons(url.urlString);
+        final result = FetchResult(
+          persons: persons,
+          isRetrievedFromCache: false,
+        );
+
+        _cache[url] = persons;
+
+        emit(result);
+      }
+    }
+  }
+}
+
+Future<Iterable<Person>> getPersons(String url) {
+  return HttpClient()
+      .getUrl(
+        Uri.parse(
+          url,
+        ),
+      )
+      .then((
+        req,
+      ) =>
+          req.close())
+      .then((
+        resp,
+      ) =>
+          resp
+              .transform(
+                utf8.decoder,
+              )
+              .join())
+      .then(
+        (str) => json.decode(
+          str,
+        ) as List<dynamic>,
+      )
+      .then(
+        (list) => list.map(
+          (e) => Person.fromJson(e),
+        ),
       );
 }
 
@@ -54,51 +161,59 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  late final NamesCubit namesCubit;
-
-  @override
-  void initState() {
-    super.initState();
-
-    namesCubit = NamesCubit();
-  }
-
-  @override
-  void dispose() {
-    namesCubit.close();
-
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: StreamBuilder<String?>(
-        stream: namesCubit.stream,
-        builder: (ctx, snapshot) {
-          final button = TextButton(
-            onPressed: () {
-              namesCubit.pickRandomName();
+      body: Column(
+        children: [
+          Row(
+            children: [
+              TextButton(
+                onPressed: () {
+                  context.read<PersonsBloc>().add(
+                        const LoadPersonAction(
+                          personUrl: PersonUrl.persons1,
+                        ),
+                      );
+                },
+                child: const Text(
+                  "Load json 1",
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  context.read<PersonsBloc>().add(
+                        const LoadPersonAction(
+                          personUrl: PersonUrl.persons2,
+                        ),
+                      );
+                },
+                child: const Text(
+                  "Load json 2",
+                ),
+              ),
+            ],
+          ),
+          BlocBuilder<PersonsBloc, FetchResult?>(
+            buildWhen: (previous, current) {
+              return previous?.persons != current?.persons;
             },
-            child: const Text("Pick Random Name"),
-          );
+            builder: (context, fetchResult) {
+              final persons = fetchResult?.persons;
 
-          switch (snapshot.connectionState) {
-            case ConnectionState.active:
-              return Column(
-                children: [
-                  Text(snapshot.data!),
-                  button,
-                ],
-              );
-            case ConnectionState.done:
-              return const SizedBox();
-            case ConnectionState.waiting:
-              return button;
-            case ConnectionState.none:
-              return button;
-          }
-        },
+              if (persons == null) {
+                return const SizedBox();
+              } else {
+                return ListView.builder(
+                  itemCount: persons.length,
+                  itemBuilder: (context, index) => Text(
+                    "${persons[index]!.name} ${persons[index]!.age}",
+                  ),
+                );
+              }
+            },
+          )
+        ],
       ),
     );
   }
