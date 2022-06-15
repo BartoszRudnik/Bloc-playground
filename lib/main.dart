@@ -47,6 +47,7 @@ class _MyHomePageState extends State<MyHomePage> {
       create: (context) => AppBloc(
         loginApiProtocol: LoginApi.instance(),
         notesApiProtocol: NotesApi(),
+        acceptableLoginHandle: const LoginHandle.fooBar(),
       ),
       child: Scaffold(
         appBar: AppBar(
