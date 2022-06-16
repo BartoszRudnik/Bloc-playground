@@ -23,6 +23,7 @@ class HomePage extends StatelessWidget {
                   seconds: 3,
                 ),
                 urlPicker: null,
+                urlLoader: null,
               ),
             ),
             BlocProvider<BottomBloc>(
@@ -32,6 +33,7 @@ class HomePage extends StatelessWidget {
                   seconds: 3,
                 ),
                 urlPicker: null,
+                urlLoader: null,
               ),
             ),
           ],

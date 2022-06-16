@@ -5,5 +5,6 @@ class BottomBloc extends AppBloc {
     required super.urls,
     required super.waitBeforeLoading,
     required super.urlPicker,
+    required super.urlLoader,
   });
 }
