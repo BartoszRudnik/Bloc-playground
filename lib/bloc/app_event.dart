@@ -36,13 +36,7 @@ class AppEventLogin implements AppEvent {
 }
 
 @immutable
-class AppEventLogout implements AppEvent {
-  final bool isLoading;
-
-  const AppEventLogout({
-    required this.isLoading,
-  });
-}
+class AppEventLogout implements AppEvent {}
 
 @immutable
 class AppEventRegister implements AppEvent {
